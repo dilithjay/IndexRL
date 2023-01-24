@@ -8,11 +8,11 @@ from torchvision.transforms import ToTensor
 
 
 class SatelliteDataset(Dataset):
-    def __init__(self, image_dir: str, mask_dir):
+    def __init__(self, data_dir: str):
         super().__init__()
         
-        self.image_list = sorted(glob(os.path.join(image_dir, '*.npy')))
-        self.mask_list = sorted(glob(os.path.join(mask_dir, '*.png')))
+        self.image_list = sorted(glob(os.path.join(data_dir, '*.npy')))
+        self.mask_list = sorted(glob(os.path.join(data_dir, '*.png')))
         self.transform = ToTensor()
         
     def __len__(self):

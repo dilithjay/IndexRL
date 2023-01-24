@@ -1,4 +1,5 @@
 import gym
+from copy import deepcopy
 import numpy as np
 
 from expression_handler import eval_expression
@@ -96,6 +97,9 @@ class IndexRLEnv(gym.Env):
     
     def get_invalid_actions(self):
         return list(set(range(len(self.actions))) - set(self.get_valid_actions()))
+    
+    def copy(self):
+        return deepcopy(self)
 
 
 def get_precision_recall(result: np.ndarray, mask: np.ndarray, threshold: float = 0.5):

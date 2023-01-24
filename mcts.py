@@ -1,5 +1,4 @@
 import math
-import copy
 import numpy as np
 import torch
 
@@ -60,20 +59,20 @@ class Node():
 
 
 class MCTS():
-    def __init__(self, env, agent, image, mask):
+    def __init__(self, env, agent, image, mask, root_node=None):
         self.env = env
         self.agent = agent
         
         start_state = self.env.reset(image, mask)
-        self.root_node = Node(start_state)
+        self.root_node = root_node or Node(start_state)
     
     def run(self, n_iter=200):
         for act in self.env.get_valid_actions():
-            env_copy = copy.deepcopy(self.env)
+            env_copy = self.env.copy()
             new_state, _, _ = env_copy.step(act)
             new_node = Node(new_state, self.env.actions[act], act)
             self.root_node.children.append(new_node)
-        self.root_node.display_tree()
+        
         for _ in tqdm(range(n_iter)):
             value, node_path = self.traverse()
             self.backpropagate(node_path, value)
@@ -95,7 +94,7 @@ class MCTS():
             node_path.append(cur_node)
         if cur_node.n:
             for act in self.env.get_valid_actions():
-                env_copy = copy.deepcopy(self.env)
+                env_copy = self.env.copy()
                 new_state, _, _ = env_copy.step(act)
                 new_node = Node(new_state, self.env.actions[act])
                 cur_node.children.append(new_node)
@@ -139,7 +138,7 @@ def main():
     n_channels = 10
     max_exp_len = 20
     
-    dataset = SatelliteDataset('D:/FYP/Code/SerpSeg/data/train', 'D:/FYP/Code/SerpSeg/data/train')
+    dataset = SatelliteDataset('D:/FYP/Code/SerpSeg/data/train')
     image, mask = dataset[0]
     
     n_channels = image.size(0)
