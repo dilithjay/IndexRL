@@ -59,29 +59,32 @@ class Node():
 
 
 class MCTS():
-    def __init__(self, env, agent, image, mask, root_node=None):
+    def __init__(self, env, agent, image, mask, reset=False):
         self.env = env
         self.agent = agent
         
-        start_state = self.env.reset(image, mask)
-        self.root_node = root_node or Node(start_state)
-    
-    def run(self, n_iter=200):
+        if reset:
+            start_state = self.env.reset(image, mask)
+        else:
+            start_state = self.env.get_cur_state()
+        self.root_node = Node(start_state)
+        
         for act in self.env.get_valid_actions():
             env_copy = self.env.copy()
             new_state, _, _ = env_copy.step(act)
             new_node = Node(new_state, self.env.actions[act], act)
             self.root_node.children.append(new_node)
-        
+    
+    def run(self, n_iter=200):        
         for _ in tqdm(range(n_iter)):
             value, node_path = self.traverse()
             self.backpropagate(node_path, value)
             self.env.reset()
         
-        self.root_node.display_tree()
-        vals = [0] * len(self.env.actions)
+        # self.root_node.display_tree()
+        vals = [float('-inf')] * len(self.env.actions)
         for child in self.root_node.children:
-            vals[child.index] = child.value / child.n
+            vals[child.index] = (child.value / child.n) if child.n else 0
         
         return np.exp(vals) / sum(np.exp(vals))
         
@@ -142,7 +145,7 @@ def main():
     image, mask = dataset[0]
     
     n_channels = image.size(0)
-    action_list = list("()+-*\=") + ['sq', 'sqrt'] + [f"c{c}" for c in range(n_channels)]
+    action_list = list("()+-*/=") + ['sq', 'sqrt'] + [f"c{c}" for c in range(n_channels)]
     
     action_size = len(action_list)
     state_size = image.flatten().size(0) + max_exp_len

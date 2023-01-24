@@ -13,10 +13,13 @@ def eval_expression(exp: list, image: np.ndarray = None):
         elif token == "sqrt":
             expression += "**0.5"
         elif token == "=":
+            expression += "="
             break
         else:
             expression += token
     
+    if expression[-1] != '=':
+        return False
     try:
         return eval(expression)
     except:

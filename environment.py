@@ -15,7 +15,7 @@ class IndexRLEnv(gym.Env):
         self.parentheses_level = 0
         self.max_exp_len = max_exp_len
     
-    def _get_cur_state(self):
+    def get_cur_state(self):
         cur_exp_indices = [self.actions.index(act) for act in self.cur_exp] + [0] * (self.max_exp_len - len(self.cur_exp))
         return np.concatenate([self.image.flatten(), cur_exp_indices])
 
@@ -37,7 +37,7 @@ class IndexRLEnv(gym.Env):
 
         reward = self.get_reward(done)
 
-        return self._get_cur_state(), reward, done
+        return self.get_cur_state(), reward, done
 
     def reset(self, image: np.ndarray = None, mask: np.ndarray = None) -> np.ndarray:
         if image is not None and mask is not None:
@@ -46,7 +46,7 @@ class IndexRLEnv(gym.Env):
         self.cur_exp = []
         self.parentheses_level = 0
         
-        return self._get_cur_state()
+        return self.get_cur_state()
 
     def render(self):
         print(self.cur_exp)
