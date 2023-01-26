@@ -6,23 +6,20 @@ def eval_expression(exp: list, image: np.ndarray = None):
 
     for token in exp:
         if token[0] == "c":
-            channel = eval(token[1:]) - 1
+            channel = eval(token[1:])
             expression += f"image[{channel}]"
         elif token == "sq":
             expression += "**2"
         elif token == "sqrt":
             expression += "**0.5"
         elif token == "=":
-            expression += "="
             break
         else:
             expression += token
-    
-    if expression[-1] != '=':
-        return False
+
     try:
         return eval(expression)
-    except:
+    except SyntaxError:
         return False
 
 
