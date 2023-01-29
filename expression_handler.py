@@ -7,7 +7,7 @@ def eval_expression(exp: list, image: np.ndarray = None):
     for token in exp:
         if token[0] == "c":
             channel = eval(token[1:])
-            expression += f"image[{channel}]"
+            expression += f"(image[{channel}] + 0.00001)"  # To prevent divide by zero
         elif token == "sq":
             expression += "**2"
         elif token == "sqrt":
