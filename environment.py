@@ -20,7 +20,9 @@ class IndexRLEnv(gym.Env):
         cur_exp_indices = [self.actions.index(act) for act in self.cur_exp] + [0] * (
             self.max_exp_len - len(self.cur_exp)
         )
-        return np.concatenate([self.image.flatten(), cur_exp_indices])
+        ohe = np.zeros((self.max_exp_len, len(self.actions)))
+        ohe[np.arange(self.max_exp_len), cur_exp_indices] = 1
+        return ohe.flatten()
 
     def step(self, action_idx: int) -> tuple:
         """Take a step in the environment with the specified action.
@@ -61,7 +63,7 @@ class IndexRLEnv(gym.Env):
                 return -10
             return 0
         if done:
-            auc = get_auc_precision_recall(result, self.mask).item()
+            auc = get_auc_precision_recall(result, self.mask)
             self.max_auc_seen = max(self.max_auc_seen, auc)
             return auc * 800
         return 40
