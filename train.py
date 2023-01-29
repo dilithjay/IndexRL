@@ -2,9 +2,8 @@ import random
 from tqdm import tqdm
 
 import torch
-from torch.utils.data import DataLoader
+import numpy as np
 
-from dataset import SatelliteDataset
 from environment import IndexRLEnv
 from agent import IndexRLAgent
 from mcts import MCTS
@@ -14,47 +13,45 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 set_seed()
 
 
-def collect_data(env, agent, dataloader, image_count=None, n_iters=None):
+def collect_data(env, agent, image, mask, n_iters=None):
     data = []
-    for i, (image, mask) in enumerate(dataloader):
-        if i == image_count:
-            break
+    done = False
+    count = 0
 
-        done = False
-        image_env = env.copy()
-        mcts = MCTS(image_env.copy(), agent, image, mask, True)
-        state = image_env.reset(image, mask)
-        count = 0
-        while not done:
-            count += 1
-            probs = mcts.run(n_iters) if n_iters else mcts.run()
-            action = random.choices(range(len(probs)), weights=probs, k=1)[0]
-            state, _, done = image_env.step(action)
-            if count % 100 == 0:
-                data.append((state, probs))
-            tree_str = mcts.root_node.display_tree(stdout=False)
-            with open(f"logs/tree_{count}.txt", "w") as fp:
-                fp.write(tree_str)
-            mcts = MCTS(image_env.copy(), agent, image, mask)
-        print(image_env.cur_exp)
-        with open("logs/aucs.txt", "a") as fp:
-            fp.write(f"{image_env.max_auc_seen}\n")
+    image_env = env.copy()
+    mcts = MCTS(image_env.copy(), agent, image, mask, True)
+    state = image_env.reset(image, mask)
+
+    while not done:
+        count += 1
+        probs = mcts.run(n_iters) if n_iters else mcts.run()
+        action = random.choices(range(len(probs)), weights=probs, k=1)[0]
+        state, _, done = image_env.step(action)
+        if count % 100 == 0:
+            data.append((state, probs))
+        tree_str = mcts.root_node.display_tree(stdout=False)
+        with open(f"logs/tree_{count}.txt", "w") as fp:
+            fp.write(tree_str)
+        mcts = MCTS(image_env.copy(), agent, image, mask)
+
+    print(image_env.cur_exp)
+    with open("logs/aucs.txt", "a") as fp:
+        fp.write(f"{image_env.max_auc_seen}\n")
 
     return data
 
 
 def main():
     max_exp_len = 12
+    image = np.load("data/images.npy")
+    image = (image - image.min(axis=1)[:, None]) / (image.max(axis=1)[:, None] - image.min(axis=1)[:, None])
+    mask = np.load("data/masks.npy")
 
-    dataset = SatelliteDataset("data/train")
-    dataloader = DataLoader(dataset, batch_size=1, shuffle=True)
-    image, _ = dataset[0]
-
-    n_channels = image.size(0)
+    n_channels = image.shape[0]
     action_list = list("()+-*/=") + ["sq", "sqrt"] + [f"c{c}" for c in range(n_channels)]
 
     action_size = len(action_list)
-    state_size = image.flatten().size(0) + max_exp_len
+    state_size = max_exp_len * action_size
 
     main_env = IndexRLEnv(action_list, max_exp_len)
     agent = IndexRLAgent(action_size, state_size)
@@ -72,7 +69,7 @@ def main():
         print(f"----------------\nIteration {i}")
         print("Collecting data...")
         # n_iters = (i + max_exp_len) * action_size * 2
-        data = collect_data(main_env.copy(), agent, dataloader, image_count=1, n_iters=200)
+        data = collect_data(main_env.copy(), agent, image, mask, n_iters=500)
         print("Data collection done.")
         for _ in tqdm(range(epochs_per_iter), "Training..."):
             for state, action_probs in data:
