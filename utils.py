@@ -3,6 +3,8 @@ import random
 import torch
 import numpy as np
 
+np.seterr(all="raise")
+
 
 def set_seed(seed: int = 42) -> None:
     np.random.seed(seed)
@@ -15,3 +17,19 @@ def set_seed(seed: int = 42) -> None:
     # Set a fixed value for the hash seed
     os.environ["PYTHONHASHSEED"] = str(seed)
     print(f"Random seed set as {seed}")
+
+
+def standardize(image: np.ndarray) -> np.ndarray:
+    img_mean = image.mean(axis=1)[:, None]
+    img_std = image.std(axis=1)[:, None]
+    image = (image - img_mean) / img_std
+
+    max_z = 3
+    image = (np.clip(image, -max_z, max_z) + max_z) / (2 * max_z)
+    return image
+
+
+def min_max_normalize(image: np.ndarray) -> np.ndarray:
+    img_min = image.min(axis=1)[:, None]
+    img_max = image.max(axis=1)[:, None]
+    return (image - img_min) / (img_max - img_min)

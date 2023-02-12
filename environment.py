@@ -14,7 +14,9 @@ class IndexRLEnv(gym.Env):
         self.cur_exp = []
         self.parentheses_level = 0
         self.max_exp_len = max_exp_len
-        self.max_auc_seen = 0
+
+        self.best_auc = 0
+        self.best_exp = []
 
     def get_cur_state(self):
         cur_exp_indices = [self.actions.index(act) for act in self.cur_exp] + [0] * (
@@ -58,15 +60,14 @@ class IndexRLEnv(gym.Env):
 
     def get_reward(self, done: bool) -> float:
         result = eval_expression(self.cur_exp, self.image.squeeze())
-        if result is False:
-            if done:
-                return -10
-            return 0
+        if result is False and done:
+            return -1
         if done:
             auc = get_auc_precision_recall(result, self.mask)
-            self.max_auc_seen = max(self.max_auc_seen, auc)
-            return auc * 800
-        return 40
+            self.best_auc = max(self.best_auc, auc)
+            self.best_exp = self.cur_exp
+            return auc
+        return 0
 
     def take_action(self, action_idx: int) -> bool:
         action = self.actions[action_idx]
@@ -123,7 +124,7 @@ def get_precision_recall(result: np.ndarray, mask: np.ndarray, threshold: float 
 
 def get_auc_precision_recall(result: np.ndarray, mask: np.ndarray):
     tot_pr = 0
-    for thresh in np.arange(0.1, 1, 0.1):
+    for thresh in np.arange(-1, 1, 0.1):
         tot_pr += get_precision_recall(result, mask, thresh)[0]
 
-    return tot_pr / 9
+    return tot_pr / 20

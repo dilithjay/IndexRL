@@ -19,7 +19,7 @@ def eval_expression(exp: list, image: np.ndarray = None):
 
     try:
         return eval(expression)
-    except SyntaxError:
+    except (SyntaxError, FloatingPointError):
         return False
 
 
