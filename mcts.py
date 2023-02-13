@@ -125,8 +125,9 @@ class MCTS:
         while True:
             # print(step, tot_reward, self.env.cur_exp)
             step += 1
+            state = torch.tensor(np.expand_dims(cur_state, 0)).int().to(device)
             with torch.no_grad():
-                probs = self.agent(torch.tensor(cur_state).float().to(device))
+                probs = self.agent.generate_single(state).squeeze()
 
             invalid_acts = self.env.get_invalid_actions()
             probs[invalid_acts] = -1

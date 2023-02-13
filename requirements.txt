@@ -3,3 +3,4 @@ torch==1.13.1
 torchvision==0.14.1
 gym==0.26.2
 treelib==1.6.1
+transformers==4.26.1

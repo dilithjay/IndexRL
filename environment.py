@@ -6,7 +6,7 @@ from expression_handler import eval_expression
 
 
 class IndexRLEnv(gym.Env):
-    def __init__(self, discrete_actions: list, max_exp_len: int = 100):
+    def __init__(self, discrete_actions: list, max_exp_len: int = 100, ohe: bool = True):
         super(IndexRLEnv, self).__init__()
         self.actions = discrete_actions
         self.image = None
@@ -14,17 +14,22 @@ class IndexRLEnv(gym.Env):
         self.cur_exp = []
         self.parentheses_level = 0
         self.max_exp_len = max_exp_len
+        self.ohe = ohe
 
         self.best_auc = 0
         self.best_exp = []
 
     def get_cur_state(self):
-        cur_exp_indices = [self.actions.index(act) for act in self.cur_exp] + [0] * (
-            self.max_exp_len - len(self.cur_exp)
-        )
-        ohe = np.zeros((self.max_exp_len, len(self.actions)))
-        ohe[np.arange(self.max_exp_len), cur_exp_indices] = 1
-        return ohe.flatten()
+        if self.ohe:
+            cur_exp_indices = [self.actions.index(act) for act in self.cur_exp] + [0] * (
+                self.max_exp_len - len(self.cur_exp)
+            )
+            enc_state = np.zeros((self.max_exp_len, len(self.actions)))
+            enc_state[np.arange(self.max_exp_len), cur_exp_indices] = 1
+            return enc_state.flatten()
+        else:
+            cur_exp_indices = [self.actions.index(act) for act in self.cur_exp]
+            return np.array(cur_exp_indices)
 
     def step(self, action_idx: int) -> tuple:
         """Take a step in the environment with the specified action.
