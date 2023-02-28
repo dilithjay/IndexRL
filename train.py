@@ -40,7 +40,7 @@ def collect_data(env, agent, image, mask, n_iters=None):
                 fp.write(tree_str)
             mcts = MCTS(image_env.copy(), agent, img_split, mask_split)
         with open("logs/aucs.txt", "a") as fp:
-            fp.write(f"{i} {image_env.best_auc} {image_env.best_exp}\n")
+            fp.write(f"{i} {image_env.best_reward} {image_env.best_exp}\n")
 
         print(image_env.cur_exp)
 

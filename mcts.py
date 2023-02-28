@@ -85,8 +85,8 @@ class MCTS:
         vals = [float("-inf")] * len(self.env.actions)
         for child in self.root_node.children:
             vals[child.index] = (child.value / child.n) if child.n else 0
-
-        return np.exp(vals) / sum(np.exp(vals))
+        exp_vals = np.exp((np.array(vals) + 1) * 2)  # Scale to amplify difference
+        return exp_vals / sum(exp_vals)
 
     def traverse(self):
         cur_node = self.root_node
@@ -138,8 +138,6 @@ class MCTS:
             tot_reward += reward
 
             if done:
-                if len(self.start_env.cur_exp) > 10:
-                    print(reward, self.env.cur_exp)
                 break
 
         return tot_reward

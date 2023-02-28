@@ -2,11 +2,18 @@ import gym
 from copy import deepcopy
 import numpy as np
 
-from expression_handler import eval_expression
+from expression_handler import check_unitless_validity, eval_expression
 
 
 class IndexRLEnv(gym.Env):
-    def __init__(self, discrete_actions: list, max_exp_len: int = 100, ohe: bool = True):
+    def __init__(
+        self,
+        discrete_actions: list,
+        max_exp_len: int = 100,
+        ohe: bool = True,
+        masked_actions: list = None,
+        unitless: bool = False,
+    ):
         super(IndexRLEnv, self).__init__()
         self.actions = discrete_actions
         self.image = None
@@ -15,8 +22,10 @@ class IndexRLEnv(gym.Env):
         self.parentheses_level = 0
         self.max_exp_len = max_exp_len
         self.ohe = ohe
+        self.masked_actions = masked_actions
+        self.unitless = unitless
 
-        self.best_auc = 0
+        self.best_reward = 0
         self.best_exp = []
 
     def get_cur_state(self):
@@ -64,14 +73,22 @@ class IndexRLEnv(gym.Env):
         print(self.cur_exp)
 
     def get_reward(self, done: bool) -> float:
-        result = eval_expression(self.cur_exp, self.image.squeeze())
+        result = False
+        if not self.unitless or (self.unitless and check_unitless_validity(self.cur_exp)):
+            result = eval_expression(self.cur_exp, self.image.squeeze())
         if result is False and done:
             return -1
         if done:
-            auc = get_auc_precision_recall(result, self.mask)
-            self.best_auc = max(self.best_auc, auc)
-            self.best_exp = self.cur_exp
-            return auc
+            if len(self.mask) > 2:
+                reward = get_auc_precision_recall(result, self.mask > 0)
+                # reward = (np.abs(result - self.mask) < 0.1).sum() / len(self.mask)
+                self.best_reward = max(self.best_reward, reward)
+                self.best_exp = self.cur_exp
+                return reward
+            else:  # Pretraining stage
+                if len(self.cur_exp) < 7:
+                    return -1
+                return 0.4 * len(self.cur_exp)
         return 0
 
     def take_action(self, action_idx: int) -> bool:
@@ -87,27 +104,58 @@ class IndexRLEnv(gym.Env):
     def get_valid_actions(self):
         if len(self.cur_exp) == self.max_exp_len - 1:
             return {self.actions.index("=")}
+
+        # Include all the channels and opening brackets in action set 1
         acts_1 = []
         for i, act in enumerate(self.actions):
             if act[0] == "c" or act in ("("):
                 acts_1.append(i)
+
+        # Remove actions specified as masked actions from acts_1
+        if self.masked_actions:
+            for act in self.masked_actions:
+                idx = self.actions.index(act)
+                if idx in acts_1:
+                    acts_1.remove(idx)
+
+        # Include the inverse of the action set 1 in action set 2
         acts_2 = list(set(range(len(self.actions))) - set(acts_1))
 
+        # Allow action set 1 when just starting the episode
         if not self.cur_exp:
             return acts_1
 
         last_act = self.cur_exp[-1]
 
+        # Disallow any other actions if episode ended with "="
         if last_act == "=":
             return []
+
+        # If last action was one of the following, allow selecting channels or an open parenthesis
         if last_act in list("(+-*/"):
             return acts_1
 
+        # Disallow consecutive squares, square roots, or combinations of them.
         if last_act == "sq" or last_act == "sqrt":
             acts_2.remove(self.actions.index("sq"))
             acts_2.remove(self.actions.index("sqrt"))
+
+        # Remove actions specified as masked actions from acts_2
+        if self.masked_actions:
+            for act in self.masked_actions:
+                idx = self.actions.index(act)
+                if idx in acts_2:
+                    acts_2.remove(idx)
+
+        # Disallow closing the brackets after just one character
+        if len(self.cur_exp) > 1 and self.cur_exp[-2] == "(":
+            acts_2.remove(self.actions.index(")"))
+
+        # Disallow closing paranthesis if there are no open paranthesis
         if self.parentheses_level <= 0:
             acts_2.remove(self.actions.index(")"))
+        else:
+            acts_2.remove(self.actions.index("="))
 
         return acts_2
 
@@ -128,8 +176,9 @@ def get_precision_recall(result: np.ndarray, mask: np.ndarray, threshold: float 
 
 
 def get_auc_precision_recall(result: np.ndarray, mask: np.ndarray):
-    tot_pr = 0
+    tot_score = 0
     for thresh in np.arange(-1, 1, 0.1):
-        tot_pr += get_precision_recall(result, mask, thresh)[0]
+        pr, rec = get_precision_recall(result, mask, thresh)
+        tot_score += min(pr, rec)
 
-    return tot_pr / 20
+    return tot_score / 20

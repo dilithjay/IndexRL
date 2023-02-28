@@ -1,9 +1,9 @@
 import os
+from pathlib import Path
 import pickle
 import random
 from glob import glob
 from tqdm import tqdm
-from pathlib import Path
 
 import torch
 import numpy as np
@@ -29,7 +29,7 @@ from configs.config_transfomer import (
 device = "cuda" if torch.cuda.is_available() else "cpu"
 set_seed()
 
-postfix = "-serp"
+postfix = "-pt-10c"
 cache_dir = f"cache/cache{postfix}"
 logs_dir = f"logs/logs{postfix}"
 models_dir = f"models/models{postfix}"
@@ -41,7 +41,6 @@ def collect_data(env, agent, image, mask, n_iters=None):
     data = []
 
     split_count = 100
-    split_size = len(mask) // split_count
     root_vals = []
 
     for i in range(split_count):
@@ -52,15 +51,15 @@ def collect_data(env, agent, image, mask, n_iters=None):
         root_vals_split = []
 
         image_env = env.copy()
-        img_split = image[:, split_size * i : split_size * (i + 1)]
-        mask_split = mask[split_size * i : split_size * (i + 1)]
-        mcts = MCTS(image_env.copy(), agent, img_split, mask_split, True)
-        state = image_env.reset(img_split, mask_split)
+        state = image_env.reset(image, mask)
+        # image_env.step()
+        mcts = MCTS(image_env.copy(), agent, image, mask, True)
 
         while not done:
             count += 1
 
             probs = mcts.run(max(n_iters // 2, n_iters - 50 * count)) if n_iters else mcts.run()
+            # probs[0] *= 3  # increase prob of predicting "("
             action = random.choices(range(len(probs)), weights=probs, k=1)[0]
             state, reward, done = image_env.step(action)
 
@@ -68,15 +67,14 @@ def collect_data(env, agent, image, mask, n_iters=None):
             tree_str = mcts.root_node.display_tree(stdout=False)
             with open(f"{logs_dir}/tree_{count}.txt", "w") as fp:
                 fp.write(f"Expression: {mcts.env.cur_exp}\n{tree_str}")
-            mcts = MCTS(image_env.copy(), agent, img_split, mask_split)
 
-        data.append((state, probs, reward))
-
-        with open(f"{logs_dir}/aucs.txt", "a") as fp:
-            fp.write(f"{i} {image_env.best_reward} {image_env.best_exp}\n")
+            mcts = MCTS(image_env.copy(), agent, image, mask)
 
         root_vals.append(root_vals_split)
         print(image_env.cur_exp)
+
+        if reward > 0:
+            data.append((state, probs, reward))
 
     with open(f"{logs_dir}/root_vals.txt", "a") as fp:
         fp.write(f"{np.concatenate(root_vals).mean()}\t{root_vals}\n")
@@ -85,45 +83,32 @@ def collect_data(env, agent, image, mask, n_iters=None):
 
 
 def main():
-    with open(f"{logs_dir}/aucs.txt", "a") as _:
-        pass
-    with open(f"{logs_dir}/root_vals.txt", "a") as _:
-        pass
 
-    max_exp_len = 14
-    image_path = "data/images.npy"  # "data/10-0.npy"
-    mask_path = "data/masks.npy"  # f"data/10-0{postfix}.npy"
-    image = np.load(image_path)
-    image = standardize(image)
-    mask = np.load(mask_path)
+    max_exp_len = 16
+    image = np.ones((10, 2, 2))
+    mask = np.ones((2, 2))
     print(image.shape, mask.shape)
 
     n_channels = image.shape[0]
     action_list = list("()+-*/=") + ["sq", "sqrt"] + [f"c{c}" for c in range(n_channels)]
 
-    main_env = IndexRLEnv(action_list, max_exp_len, False, masked_actions=["sq", "sqrt"])
-
-    data_buffer = []
-    caches = sorted(glob(f"{cache_dir}/*.pkl"))
-    if caches:
-        with open(caches[-1], "rb") as fp:
-            data_buffer = pickle.load(fp)
+    main_env = IndexRLEnv(action_list, max_exp_len, False, masked_actions=["sq", "sqrt"], unitless=False)
 
     n = 0
     models = sorted(glob(f"{models_dir}/*.pt"))
     pretrained = True
 
     # Define model
-    if pretrained:
-        if models:
-            model_path = models[-1]
-            n = int(os.path.basename(model_path).split("_")[1])
-        else:
-            model_path = "models/models-pt-2/model_23_loss-8.56757884549163.pt"
-            n = 0
-        print("Model path:", model_path)
+    if pretrained and models:
+        model_path = models[-1]
+        print(model_path)
+        n = int(os.path.basename(model_path).split("_")[1])
         agent = torch.load(model_path)
     else:
+        with open(f"{logs_dir}/aucs.txt", "w") as _:
+            pass
+        with open(f"{logs_dir}/root_vals.txt", "w") as _:
+            pass
         model_args = dict(
             n_layer=n_layer,
             n_head=n_head,
@@ -139,9 +124,15 @@ def main():
 
     optimizer = agent.configure_optimizers(weight_decay, learning_rate, (beta1, beta2), device)
 
-    max_buffer_size = 4000
+    data_buffer = []
+    caches = sorted(glob(f"{cache_dir}/*.pkl"))
+    if caches:
+        with open(caches[-1], "rb") as fp:
+            data_buffer = pickle.load(fp)
+
+    max_buffer_size = 1000
     train_iterations = 100
-    epochs_per_iter = 30
+    epochs_per_iter = 20
     for i in range(n + 1, n + train_iterations + 1):
         print(f"----------------\nIteration {i}")
         print("Collecting data...")
@@ -150,15 +141,14 @@ def main():
         data_buffer = (data + data_buffer)[:max_buffer_size]
         buffer_cp = data_buffer.copy()
         random.shuffle(buffer_cp)
-        print(f"Data collection done. Collected {len(data)} examples. Buffer size = {len(data_buffer)}")
-
+        print(f"Data collection done. Collected {len(data)} examples. Total length: {len(data_buffer)}")
         losses = []
         for _ in tqdm(range(epochs_per_iter), "Training..."):
-            for state, probs, reward in data:
+            for state, probs, reward in buffer_cp:
                 state = torch.tensor(np.expand_dims(state, axis=0)).int().to(device)
                 probs = torch.tensor(np.expand_dims(probs, axis=0)).float().to(device) * 100
                 _, loss = agent(state, probs)
-                losses.append((loss * (1 - reward)).item())
+                losses.append((loss * reward).item())
 
                 optimizer.zero_grad()
                 loss.backward()
