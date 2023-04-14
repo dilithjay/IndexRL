@@ -33,7 +33,7 @@ class UnitNode(object):
     def __add__(self, obj):
         if obj.level == self.level:
             return UnitNode(self.level)
-        raise SyntaxError
+        raise ValueError
 
     def __sub__(self, obj):
         return self + obj
@@ -67,7 +67,9 @@ def check_unitless_validity(exp: list):
         res = eval(expression)
         if res.level == 0:
             return True
-        return False
+        return res.level
+    except ValueError:
+        return 1
     except (SyntaxError, FloatingPointError):
         return False
 

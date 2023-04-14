@@ -1,6 +1,11 @@
+from glob import glob
+import os
+import cv2
 import gym
 from copy import deepcopy
 import numpy as np
+from tqdm import tqdm
+import pickle
 
 from expression_handler import check_unitless_validity, eval_expression
 
@@ -27,6 +32,15 @@ class IndexRLEnv(gym.Env):
 
         self.best_reward = 0
         self.best_exp = []
+        self.seen = set()
+
+    def load_seen(self, seen_path):
+        with open(seen_path, "rb") as fp:
+            self.seen = pickle.load(fp)
+
+    def save_seen(self, seen_path):
+        with open(seen_path, "wb") as fp:
+            pickle.dump(self.seen, fp)
 
     def get_cur_state(self):
         if self.ohe:
@@ -56,6 +70,12 @@ class IndexRLEnv(gym.Env):
         if len(self.cur_exp) >= self.max_exp_len:
             done = True
 
+        if done:
+            exp_s = str(self.cur_exp)
+            if exp_s in self.seen:
+                return self.get_cur_state(), -1, True
+            self.seen.add(exp_s)
+
         reward = self.get_reward(done)
 
         return self.get_cur_state(), reward, done
@@ -73,23 +93,28 @@ class IndexRLEnv(gym.Env):
         print(self.cur_exp)
 
     def get_reward(self, done: bool) -> float:
-        result = False
-        if not self.unitless or (self.unitless and check_unitless_validity(self.cur_exp)):
-            result = eval_expression(self.cur_exp, self.image.squeeze())
-        if result is False and done:
+        if not done:
+            return 0
+
+        if len(self.cur_exp) < 3:
             return -1
-        if done:
-            if len(self.mask) > 2:
-                reward = get_auc_precision_recall(result, self.mask > 0)
-                # reward = (np.abs(result - self.mask) < 0.1).sum() / len(self.mask)
-                self.best_reward = max(self.best_reward, reward)
-                self.best_exp = self.cur_exp
-                return reward
-            else:  # Pretraining stage
-                if len(self.cur_exp) < 7:
-                    return -1
-                return 0.4 * len(self.cur_exp)
-        return 0
+
+        unitless = check_unitless_validity(self.cur_exp)
+        result = eval_expression(self.cur_exp, self.image.squeeze())
+        if result is False:
+            return -1
+
+        if len(self.mask) > 2:
+            reward = get_auc_precision_recall(result, self.mask > 0)
+            # reward = (np.abs(result - self.mask) < 0.1).sum() / len(self.mask)
+            self.best_reward = max(self.best_reward, reward)
+            self.best_exp = self.cur_exp
+            return reward
+        else:  # Pretraining stage
+            # Motivate longer expressions
+            if len(self.cur_exp) < self.max_exp_len // 4 or "(" not in self.cur_exp:
+                return -1
+            return 0.5 + 0.05 * len(self.cur_exp) + 0.01 * self.cur_exp.count(")") + 1 * unitless
 
     def take_action(self, action_idx: int) -> bool:
         action = self.actions[action_idx]
@@ -164,6 +189,34 @@ class IndexRLEnv(gym.Env):
 
     def copy(self):
         return deepcopy(self)
+
+    def state_to_expression(self, state):
+        return list(map(lambda x: self.actions[x], state))
+
+
+def get_final_reward(exp: list, image_dir: str, mask_dir: str) -> float:
+    image_paths = glob(os.path.join(image_dir, "*.npy"))
+    mask_paths = glob(os.path.join(mask_dir, "*.npy"))
+    assert len(image_paths) == len(mask_paths)
+
+    unitless = check_unitless_validity(exp)
+    if unitless is False:
+        return -1
+
+    tot_reward = 0
+    for image_path, mask_path in tqdm(zip(image_paths, mask_paths), "Calculating reward"):
+        image = np.load(image_path)
+        mask = np.load(mask_path)
+
+        result = eval_expression(exp, image.squeeze())
+        if result is False:
+            tot_reward -= 1
+        elif len(mask) > 2:
+            tot_reward += get_auc_precision_recall(result, mask > 0)
+        else:  # Pretraining stage
+            tot_reward += 0.5 + 0.05 * len(exp) + 0.01 * exp.count(")") + 1 * unitless
+
+    return tot_reward / len(image_paths)
 
 
 def get_precision_recall(result: np.ndarray, mask: np.ndarray, threshold: float = 0.5):
