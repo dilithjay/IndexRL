@@ -1,0 +1,20 @@
+[tool.poetry]
+name = "indexrl"
+version = "0.1.0"
+description = "Generate remote sensing indices using image-mask pairs."
+authors = ["Dilith Jayakody"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.8"
+numpy = "1.20.3"
+torch = "1.13.1"
+torchvision = "0.14.1"
+gym = "0.26.1"
+treelib = "1.6.1"
+transformers = "4.26.1"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
