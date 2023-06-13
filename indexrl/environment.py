@@ -1,6 +1,5 @@
 from glob import glob
 import os
-import cv2
 import gym
 from copy import deepcopy
 import numpy as np
@@ -9,8 +8,8 @@ import pickle
 
 from sklearn.metrics import roc_curve, auc
 
-from expression_handler import check_unitless_validity, eval_expression
-from utils import min_max_normalize, standardize
+from indexrl.expression_handler import check_unitless_validity, eval_expression
+from indexrl.utils import standardize
 
 
 class IndexRLEnv(gym.Env):
@@ -48,9 +47,9 @@ class IndexRLEnv(gym.Env):
 
     def get_cur_state(self):
         if self.ohe:
-            cur_exp_indices = [self.actions.index(act) for act in self.cur_exp] + [0] * (
-                self.max_exp_len - len(self.cur_exp)
-            )
+            cur_exp_indices = [self.actions.index(act) for act in self.cur_exp] + [
+                0
+            ] * (self.max_exp_len - len(self.cur_exp))
             enc_state = np.zeros((self.max_exp_len, len(self.actions)))
             enc_state[np.arange(self.max_exp_len), cur_exp_indices] = 1
             return enc_state.flatten()
@@ -118,7 +117,12 @@ class IndexRLEnv(gym.Env):
             # Motivate longer expressions
             if len(self.cur_exp) < self.max_exp_len // 3 or "(" not in self.cur_exp:
                 return -1
-            return 0.5 + 0.05 * len(self.cur_exp) + 0.01 * self.cur_exp.count(")") + 1 * unitless
+            return (
+                0.5
+                + 0.05 * len(self.cur_exp)
+                + 0.01 * self.cur_exp.count(")")
+                + 1 * unitless
+            )
 
     def take_action(self, action_idx: int) -> bool:
         action = self.actions[action_idx]
@@ -208,7 +212,9 @@ def get_final_reward(exp: list, image_dir: str, mask_dir: str, rew_type="-") -> 
         return -1
 
     tot_reward = 0
-    for image_path, mask_path in tqdm(zip(image_paths, mask_paths), "Calculating reward"):
+    for image_path, mask_path in tqdm(
+        zip(image_paths, mask_paths), "Calculating reward"
+    ):
         image = np.load(image_path)
         mask = np.load(mask_path)
 
@@ -220,16 +226,29 @@ def get_final_reward(exp: list, image_dir: str, mask_dir: str, rew_type="-") -> 
             if rew_type == "corr":
                 tot_reward += abs(get_correlation(1 - norm_result, mask > 0))
             elif rew_type == "f1":
-                tot_reward += min(get_f1_score(norm_result, mask > 0), get_f1_score(1 - norm_result, mask > 0))
+                tot_reward += min(
+                    get_f1_score(norm_result, mask > 0),
+                    get_f1_score(1 - norm_result, mask > 0),
+                )
             elif rew_type == "auc":
-                tot_reward += min(get_auc_score(norm_result, mask > 0), get_auc_score(1 - norm_result, mask > 0))
+                tot_reward += min(
+                    get_auc_score(norm_result, mask > 0),
+                    get_auc_score(1 - norm_result, mask > 0),
+                )
             elif rew_type == "sim":
-                tot_reward += min(get_similarity(norm_result, mask > 0), get_similarity(1 - norm_result, mask > 0))
+                tot_reward += min(
+                    get_similarity(norm_result, mask > 0),
+                    get_similarity(1 - norm_result, mask > 0),
+                )
             elif rew_type == "iou":
-                tot_reward += min(get_jaccard(norm_result, mask > 0), get_jaccard(1 - norm_result, mask > 0))
+                tot_reward += min(
+                    get_jaccard(norm_result, mask > 0),
+                    get_jaccard(1 - norm_result, mask > 0),
+                )
             else:  # AUC F1
                 tot_reward += min(
-                    get_auc_f1(standardize(result), mask > 0), get_auc_f1(1 - standardize(result), mask > 0)
+                    get_auc_f1(standardize(result), mask > 0),
+                    get_auc_f1(1 - standardize(result), mask > 0),
                 )
         else:  # Pretraining stage
             tot_reward += 0.5 + 0.02 * len(exp) + 0.2 * exp.count(")") + 1 * unitless
@@ -270,9 +289,14 @@ def get_correlation(result: np.ndarray, mask: np.ndarray):
 
 
 def get_similarity(result: np.ndarray, mask: np.ndarray):
-    return np.dot(result.flatten(), mask.flatten()) / (np.linalg.norm(result) * np.linalg.norm(mask))
+    return np.dot(result.flatten(), mask.flatten()) / (
+        np.linalg.norm(result) * np.linalg.norm(mask)
+    )
 
 
 def get_jaccard(pred, target, threshold=0.5):
     pred_thresh = pred > threshold
-    return np.logical_and(pred_thresh, target).sum() / np.logical_or(pred_thresh, target).sum()
+    return (
+        np.logical_and(pred_thresh, target).sum()
+        / np.logical_or(pred_thresh, target).sum()
+    )
