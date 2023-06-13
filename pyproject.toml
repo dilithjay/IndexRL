@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "indexrl"
-version = "0.1.0"
+version = "0.1.1"
 description = "Generate remote sensing indices using image-mask pairs."
 authors = ["Dilith Jayakody"]
 readme = "README.md"
