@@ -19,13 +19,13 @@ def set_seed(seed: int = 42) -> None:
     print(f"Random seed set as {seed}")
 
 
-def standardize(image: np.ndarray) -> np.ndarray:
+def standardize(image: np.ndarray, max_z: float = 3, min_max: tuple = (0, 1)) -> np.ndarray:
     img_mean = image.mean(axis=1)[:, None]
     img_std = image.std(axis=1)[:, None]
-    image = (image - img_mean) / img_std
+    image = (image - img_mean) / (img_std + 0.0000001)
 
-    max_z = 3
     image = (np.clip(image, -max_z, max_z) + max_z) / (2 * max_z)
+    image = image * (min_max[1] - min_max[0]) + min_max[0]
     return image
 
 

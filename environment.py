@@ -7,7 +7,10 @@ import numpy as np
 from tqdm import tqdm
 import pickle
 
+from sklearn.metrics import roc_curve, auc
+
 from expression_handler import check_unitless_validity, eval_expression
+from utils import min_max_normalize, standardize
 
 
 class IndexRLEnv(gym.Env):
@@ -39,6 +42,7 @@ class IndexRLEnv(gym.Env):
             self.seen = pickle.load(fp)
 
     def save_seen(self, seen_path):
+        print("Seen length:", len(self.seen))
         with open(seen_path, "wb") as fp:
             pickle.dump(self.seen, fp)
 
@@ -105,14 +109,14 @@ class IndexRLEnv(gym.Env):
             return -1
 
         if len(self.mask) > 2:
-            reward = get_auc_precision_recall(result, self.mask > 0)
+            reward = get_auc_f1(result, self.mask > 0)
             # reward = (np.abs(result - self.mask) < 0.1).sum() / len(self.mask)
             self.best_reward = max(self.best_reward, reward)
             self.best_exp = self.cur_exp
             return reward
         else:  # Pretraining stage
             # Motivate longer expressions
-            if len(self.cur_exp) < self.max_exp_len // 4 or "(" not in self.cur_exp:
+            if len(self.cur_exp) < self.max_exp_len // 3 or "(" not in self.cur_exp:
                 return -1
             return 0.5 + 0.05 * len(self.cur_exp) + 0.01 * self.cur_exp.count(")") + 1 * unitless
 
@@ -194,7 +198,7 @@ class IndexRLEnv(gym.Env):
         return list(map(lambda x: self.actions[x], state))
 
 
-def get_final_reward(exp: list, image_dir: str, mask_dir: str) -> float:
+def get_final_reward(exp: list, image_dir: str, mask_dir: str, rew_type="-") -> float:
     image_paths = glob(os.path.join(image_dir, "*.npy"))
     mask_paths = glob(os.path.join(mask_dir, "*.npy"))
     assert len(image_paths) == len(mask_paths)
@@ -212,9 +216,23 @@ def get_final_reward(exp: list, image_dir: str, mask_dir: str) -> float:
         if result is False:
             tot_reward -= 1
         elif len(mask) > 2:
-            tot_reward += get_auc_precision_recall(result, mask > 0)
+            norm_result = standardize(result, 3, (0, 1))
+            if rew_type == "corr":
+                tot_reward += abs(get_correlation(1 - norm_result, mask > 0))
+            elif rew_type == "f1":
+                tot_reward += min(get_f1_score(norm_result, mask > 0), get_f1_score(1 - norm_result, mask > 0))
+            elif rew_type == "auc":
+                tot_reward += min(get_auc_score(norm_result, mask > 0), get_auc_score(1 - norm_result, mask > 0))
+            elif rew_type == "sim":
+                tot_reward += min(get_similarity(norm_result, mask > 0), get_similarity(1 - norm_result, mask > 0))
+            elif rew_type == "iou":
+                tot_reward += min(get_jaccard(norm_result, mask > 0), get_jaccard(1 - norm_result, mask > 0))
+            else:  # AUC F1
+                tot_reward += min(
+                    get_auc_f1(standardize(result), mask > 0), get_auc_f1(1 - standardize(result), mask > 0)
+                )
         else:  # Pretraining stage
-            tot_reward += 0.5 + 0.05 * len(exp) + 0.01 * exp.count(")") + 1 * unitless
+            tot_reward += 0.5 + 0.02 * len(exp) + 0.2 * exp.count(")") + 1 * unitless
 
     return tot_reward / len(image_paths)
 
@@ -228,10 +246,33 @@ def get_precision_recall(result: np.ndarray, mask: np.ndarray, threshold: float 
     return tp / (tp + fp + 0.0001), tp / (tp + fn + 0.0001)
 
 
-def get_auc_precision_recall(result: np.ndarray, mask: np.ndarray):
+def get_auc_f1(result: np.ndarray, mask: np.ndarray):
     tot_score = 0
     for thresh in np.arange(-1, 1, 0.1):
-        pr, rec = get_precision_recall(result, mask, thresh)
-        tot_score += min(pr, rec)
+        # pr, rec = get_precision_recall(result, mask, thresh)
+        tot_score += get_f1_score(result > thresh, mask)
 
     return tot_score / 20
+
+
+def get_auc_score(result: np.ndarray, mask: np.ndarray):
+    fpr, tpr, _ = roc_curve(mask.ravel(), result.ravel())
+    return auc(fpr, tpr)
+
+
+def get_f1_score(result: np.ndarray, mask: np.ndarray):
+    pr, rec = get_precision_recall(result.ravel(), mask.ravel())
+    return 2 * pr * rec / (pr + rec + 0.0001)
+
+
+def get_correlation(result: np.ndarray, mask: np.ndarray):
+    return np.abs(np.corrcoef(result.flatten(), mask.flatten())[0, 1])
+
+
+def get_similarity(result: np.ndarray, mask: np.ndarray):
+    return np.dot(result.flatten(), mask.flatten()) / (np.linalg.norm(result) * np.linalg.norm(mask))
+
+
+def get_jaccard(pred, target, threshold=0.5):
+    pred_thresh = pred > threshold
+    return np.logical_and(pred_thresh, target).sum() / np.logical_or(pred_thresh, target).sum()

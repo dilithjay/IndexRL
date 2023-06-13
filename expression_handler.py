@@ -1,4 +1,5 @@
 import numpy as np
+import random
 
 
 def eval_expression(exp: list, image: np.ndarray = None):
@@ -7,7 +8,7 @@ def eval_expression(exp: list, image: np.ndarray = None):
     for token in exp:
         if token[0] == "c":
             channel = eval(token[1:])
-            expression += f"(image[{channel}] + 0.00001)"  # To prevent divide by zero
+            expression += f"(image[{channel}] + {(random.random() * 0.001 + 1) * 1e-5})"  # To prevent divide by zero
         elif token == "sq":
             expression += "**2"
         elif token == "sqrt":
@@ -21,8 +22,7 @@ def eval_expression(exp: list, image: np.ndarray = None):
         return eval(expression)
     except (SyntaxError, FloatingPointError):
         return False
-    except (TypeError):
-        print(expression, exp)
+    except TypeError:
         return False
 
 
