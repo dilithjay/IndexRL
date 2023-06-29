@@ -72,10 +72,3 @@ def check_unitless_validity(exp: list):
         return 1
     except (SyntaxError, FloatingPointError):
         return False
-
-
-if __name__ == "__main__":
-    # image = np.random.rand(3, 2, 2)
-    # print(image)
-    # print(eval_expression(["(", "c0", "/", "c2", ")"], image))
-    print(check_unitless_validity(["(", "c0", "+", "c1", ")", "/", "(", "c2", "+", "c2", ")"]))

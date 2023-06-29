@@ -49,7 +49,9 @@ class Node:
             cur_node, node_name = stack.pop()
             for child in cur_node.children:
                 tree.create_node(
-                    f"{child.name} => value: {child.value}, n: {child.n}", f"node_{count}", parent=node_name
+                    f"{child.name} => value: {child.value}, n: {child.n}",
+                    f"node_{count}",
+                    parent=node_name,
                 )
                 stack.append((child, f"node_{count}"))
                 count += 1
