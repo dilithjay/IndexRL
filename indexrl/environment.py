@@ -17,7 +17,7 @@ class IndexRLEnv(gym.Env):
         self,
         discrete_actions: list,
         max_exp_len: int = 100,
-        ohe: bool = True,
+        ohe: bool = False,
         masked_actions: list = None,
         unitless: bool = False,
     ):
@@ -37,8 +37,9 @@ class IndexRLEnv(gym.Env):
         self.seen = set()
 
     def load_seen(self, seen_path):
-        with open(seen_path, "rb") as fp:
-            self.seen = pickle.load(fp)
+        if os.path.exists(seen_path):
+            with open(seen_path, "rb") as fp:
+                self.seen = pickle.load(fp)
 
     def save_seen(self, seen_path):
         print("Seen length:", len(self.seen))
