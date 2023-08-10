@@ -203,9 +203,6 @@ def train_iter(
     rewards = {}
     reward_min, reward_max = 1, 0
     for state, reward in data_buffer:
-        # print(state, reward)
-        # if len(state) < 4:
-        #     continue
         states[len(state) - 1] = states.get(len(state) - 1, []) + [state[:-1]]
         actions[len(state) - 1] = actions.get(len(state) - 1, []) + [state[1:]]
         rewards[len(state) - 1] = rewards.get(len(state) - 1, []) + [reward]
@@ -226,8 +223,9 @@ def train_iter(
             state = state.to(device)
             acts = acts.to(device)
             _, loss = agent(state, acts)
-            rew_scaled = (rews - reward_min) / (reward_max - reward_min)
-            loss *= rew_scaled.mean()
+            if reward_max != reward_min:
+                rew_scaled = (rews - reward_min) / (reward_max - reward_min)
+                loss *= rew_scaled.mean()
             losses.append(loss.item())
 
             optimizer.zero_grad()
