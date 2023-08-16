@@ -2,9 +2,9 @@ name: Tests
 
 on:
   push:
-    branches: [ "poetry" ]
+    branches: [ "main" ]
   pull_request:
-    branches: [ "poetry" ]
+    branches: [ "main" ]
 
 permissions:
   contents: read
