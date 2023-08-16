@@ -43,4 +43,8 @@ jobs:
 
       - run: poetry install --no-interaction
 
+      - run: wget "https://drive.google.com/uc?export=download&id=1IloosHPhRMcT2EFj4xsC0Rl05Nh-ySyA" -O data.zip
+
+      - run: unzip data.zip -d tests/data/
+
       - run: poetry run pytest
