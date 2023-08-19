@@ -1,2 +1,2 @@
 # IndexRL
-Using reinfrocement learning to generate mathematical operations for remote sensing indices.
+Using reinforcement learning to generate mathematical expressions for remote sensing indices.
