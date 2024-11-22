@@ -1,8 +1,10 @@
 from glob import glob
 import os
+import random
 import gym
 from copy import deepcopy
 import numpy as np
+import pandas as pd
 from tqdm import tqdm
 import pickle
 
@@ -10,6 +12,7 @@ from sklearn.metrics import roc_curve, auc
 
 from indexrl.expression_handler import check_unitless_validity, eval_expression
 from indexrl.utils import standardize
+from train import train_model
 
 
 class IndexRLEnv(gym.Env):
@@ -109,7 +112,7 @@ class IndexRLEnv(gym.Env):
             return -1
 
         if len(self.mask) > 2:
-            reward = get_auc_f1(result, self.mask > 0)
+            reward = get_correlation(result, self.mask > 0)
             # reward = (np.abs(result - self.mask) < 0.1).sum() / len(self.mask)
             self.best_reward = max(self.best_reward, reward)
             self.best_exp = self.cur_exp
@@ -203,49 +206,55 @@ class IndexRLEnv(gym.Env):
         return list(map(lambda x: self.actions[x], state))
 
 
-def get_final_reward(exp: list, image_dir: str, mask_dir: str, rew_type="-") -> float:
-    image_paths = glob(os.path.join(image_dir, "*.npy"))
-    mask_paths = glob(os.path.join(mask_dir, "*.npy"))
+def get_final_reward(
+    exp: list, image_dir: str, mask_dir: str, rew_type="-", k=None, indices=None
+) -> float:
+    image_paths = sorted(glob(os.path.join(image_dir, "*.npy")))
+    mask_paths = sorted(glob(os.path.join(mask_dir, "*.npy")))
     assert len(image_paths) == len(mask_paths)
+
+    if indices == None:
+        if k is None:
+            indices = range(len(image_paths))
+        else:
+            random.seed(0)
+            indices = random.choices(range(len(image_paths)), k=k)
 
     unitless = check_unitless_validity(exp)
     if unitless is False:
         return -1
 
+    if rew_type == "train":
+        return get_training_reward(exp, image_paths, mask_paths, indices)
+
     tot_reward = 0
-    for image_path, mask_path in tqdm(
-        zip(image_paths, mask_paths), "Calculating reward"
-    ):
+    for i in indices:
+        image_path = image_paths[i]
+        mask_path = mask_paths[i]
         image = np.load(image_path)
         mask = np.load(mask_path)
 
         result = eval_expression(exp, image.squeeze())
-        if result is False:
+        if (
+            result is False
+            or np.abs(result).sum() < 1
+            or (result.max() - result.min()) < 0.01
+        ):
             tot_reward -= 1
         elif len(mask) > 2:
             norm_result = standardize(result, 3, (0, 1))
             if rew_type == "corr":
-                tot_reward += abs(get_correlation(1 - norm_result, mask > 0))
+                tot_reward += abs(get_correlation(norm_result, mask > 0))
             elif rew_type == "f1":
-                tot_reward += min(
-                    get_f1_score(norm_result, mask > 0),
-                    get_f1_score(1 - norm_result, mask > 0),
-                )
+                tot_reward += get_f1_score(norm_result, mask > 0)
             elif rew_type == "auc":
-                tot_reward += min(
-                    get_auc_score(norm_result, mask > 0),
-                    get_auc_score(1 - norm_result, mask > 0),
-                )
+                tot_reward += get_auc_score(norm_result, mask > 0)
             elif rew_type == "sim":
-                tot_reward += min(
-                    get_similarity(norm_result, mask > 0),
-                    get_similarity(1 - norm_result, mask > 0),
-                )
+                tot_reward += get_similarity(norm_result, mask > 0)
             elif rew_type == "iou":
-                tot_reward += min(
-                    get_jaccard(norm_result, mask > 0),
-                    get_jaccard(1 - norm_result, mask > 0),
-                )
+                tot_reward += get_jaccard(norm_result, mask > 0)
+            elif rew_type == "usl":
+                tot_reward += get_unsupervised_reward(image, norm_result)
             else:  # AUC F1
                 tot_reward += min(
                     get_auc_f1(standardize(result), mask > 0),
@@ -254,7 +263,7 @@ def get_final_reward(exp: list, image_dir: str, mask_dir: str, rew_type="-") -> 
         else:  # Pretraining stage
             tot_reward += 0.5 + 0.02 * len(exp) + 0.2 * exp.count(")") + 1 * unitless
 
-    return tot_reward / len(image_paths)
+    return tot_reward / len(indices)
 
 
 def get_precision_recall(result: np.ndarray, mask: np.ndarray, threshold: float = 0.5):
@@ -286,7 +295,8 @@ def get_f1_score(result: np.ndarray, mask: np.ndarray):
 
 
 def get_correlation(result: np.ndarray, mask: np.ndarray):
-    return np.abs(np.corrcoef(result.flatten(), mask.flatten())[0, 1])
+    corr = np.abs(pd.Series(result.flatten()).corr(pd.Series(mask.flatten())))
+    return corr
 
 
 def get_similarity(result: np.ndarray, mask: np.ndarray):
@@ -301,3 +311,25 @@ def get_jaccard(pred, target, threshold=0.5):
         np.logical_and(pred_thresh, target).sum()
         / np.logical_or(pred_thresh, target).sum()
     )
+
+
+def get_unsupervised_reward(image: np.ndarray, index: np.ndarray):
+    corr = 0
+    for channel in image:
+        corr += 1 - np.abs(np.corrcoef(channel, index)[0, 1])
+    return corr / len(image)
+
+
+def get_training_reward(exp: list, image_paths: str, mask_paths: str, indices=None):
+    out = train_model(
+        "unet",
+        os.environ["DATASET_NAME"],
+        [exp],
+        1e-3,
+        0,
+        None,
+        min_epochs=3,
+        max_epochs=10,
+        deterministic=False,
+    )
+    return out[-1]["valid_dataset_iou"]

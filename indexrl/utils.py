@@ -1,8 +1,10 @@
+import json
 import os
 import random
 import torch
 import numpy as np
 
+device = "cuda" if torch.cuda.is_available() else "cpu"
 np.seterr(all="raise")
 
 
@@ -44,3 +46,27 @@ def get_n_channels(image_path: str) -> int:
 
 def state_to_expression(state, action_list):
     return list(map(lambda x: action_list[x], state))
+
+
+def log_all_seen_exps(exp, rew_type, rew, action_list=None):
+    if rew < 0:
+        return
+
+    if type(exp[0]) != str:
+        exp = state_to_expression(exp, action_list)
+
+    all_seen_path = f"all_seen-{os.environ['DATASET_NAME']}.json"
+    if os.path.exists(all_seen_path):
+        with open(all_seen_path, "r") as fp:
+            all_seen = json.load(fp)
+    else:
+        all_seen = {}
+
+    if rew_type in all_seen:
+        if str(exp) in all_seen[rew_type]:
+            return
+        all_seen[rew_type][str(exp)] = rew
+    else:
+        all_seen[rew_type] = {str(exp): rew}
+    with open(all_seen_path, "w") as fp:
+        json.dump(all_seen, fp)

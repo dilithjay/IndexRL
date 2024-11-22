@@ -5,7 +5,7 @@ import torch
 from tqdm import tqdm
 from treelib import Tree
 
-device = "cuda" if torch.cuda.is_available() else "cpu"
+from indexrl.utils import device, log_all_seen_exps
 
 
 class Node:
@@ -21,17 +21,19 @@ class Node:
         if not self.children:
             return None
 
-        max_node = self.children[0]
         max_ucb1 = float("-inf")
+        max_nodes = []
 
         for child in self.children:
             ucb1 = self.get_child_ucb1(child)
 
-            if ucb1 > max_ucb1:
+            if ucb1 == max_ucb1:
+                max_nodes.append(child)
+            elif ucb1 > max_ucb1:
                 max_ucb1 = ucb1
-                max_node = child
+                max_nodes = [child]
 
-        return max_node
+        return np.random.choice(max_nodes)
 
     def get_child_ucb1(self, child):
         if child.n == 0:
@@ -132,14 +134,16 @@ class MCTS:
                 probs = self.agent.generate_single(state).squeeze()
 
             invalid_acts = self.env.get_invalid_actions()
-            probs[invalid_acts] = -1
-
-            action_idx = probs.argmax()
+            probs[invalid_acts] = float("-inf")
+            probs = torch.softmax(probs, 0).cpu().numpy().astype("float64")
+            probs /= probs.sum()
+            action_idx = np.random.choice(len(probs), 1, p=probs)[0]
 
             cur_state, reward, done = self.env.step(action_idx)
             tot_reward += reward
 
             if done:
+                log_all_seen_exps(cur_state, "corr", tot_reward, self.env.actions)
                 break
 
         return tot_reward

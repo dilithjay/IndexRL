@@ -8,8 +8,10 @@ import numpy as np
 import torch
 from tqdm import tqdm
 from indexrl.mcts import MCTS
+from indexrl.utils import device, log_all_seen_exps
 from indexrl.environment import get_final_reward
 from indexrl.gpt import GPT, GPTConfig
+from indexrl.lstm import LSTMModel
 from indexrl.configs.config_transfomer import (
     n_layer,
     n_head,
@@ -22,8 +24,6 @@ from indexrl.configs.config_transfomer import (
     beta1,
     beta2,
 )
-
-device = "cuda" if torch.cuda.is_available() else "cpu"
 
 
 def explore(
@@ -87,7 +87,9 @@ def explore(
         if reward < 0:
             print(f"Expression: {mcts.env.cur_exp}, Reward < 0. Skipping.")
             continue
-        final_reward = get_final_reward(image_env.cur_exp, image_dir, mask_dir)
+        final_reward = get_final_reward(
+            image_env.cur_exp, image_dir, mask_dir, rew_type="train"
+        )
         if final_reward > 0.01:
             data.append((state, final_reward))
 
@@ -96,6 +98,7 @@ def explore(
                 fp.write(f"{i} {final_reward} {image_env.cur_exp}\n")
 
         root_vals.append(root_vals_split)
+        log_all_seen_exps(image_env.cur_exp, "train", final_reward)
         print(image_env.cur_exp, final_reward)
 
     if root_vals:
@@ -105,27 +108,36 @@ def explore(
     return data
 
 
-def create_model(vocab_size: int = None, model_path: str = "", model_args: dict = None):
-    if model_path:
-        model = torch.load(model_path)
+def create_model(
+    model_type: str,
+    vocab_size: int = None,
+    model_path: str = "",
+    model_args: dict = None,
+):
+    if model_type == "gpt":
+        if model_path:
+            model = torch.load(model_path)
+        else:
+            if not model_args:
+                model_args = dict(
+                    n_layer=n_layer,
+                    n_head=n_head,
+                    n_embd=n_embd,
+                    block_size=block_size,
+                    bias=bias,
+                    vocab_size=vocab_size,
+                    dropout=dropout,
+                )
+            gptconf = GPTConfig(**model_args)
+            model = GPT(gptconf)
+            model.to(device)
+        optimizer = model.configure_optimizers(
+            weight_decay, learning_rate, (beta1, beta2), device
+        )
     else:
-        if not model_args:
-            model_args = dict(
-                n_layer=n_layer,
-                n_head=n_head,
-                n_embd=n_embd,
-                block_size=block_size,
-                bias=bias,
-                vocab_size=vocab_size,
-                dropout=dropout,
-            )
-        gptconf = GPTConfig(**model_args)
-        model = GPT(gptconf)
-
-    optimizer = model.configure_optimizers(
-        weight_decay, learning_rate, (beta1, beta2), device
-    )
-
+        model = LSTMModel(vocab_size, 4)
+        model.to(device)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=0.001)
     return model, optimizer
 
 
@@ -137,7 +149,7 @@ class DynamicBuffer(list):
     def __init__(
         self,
         keep_fraction: float = 0.97,
-        max_buffer_size: int = 500,
+        max_buffer_size: int = 8000,
         min_buffer_size: int = 20,
         max_reached: bool = False,
         cached_buffer_path: str = "",
@@ -217,12 +229,23 @@ def train_iter(
         buffer.append((state, acts, rews))
     random.shuffle(buffer)
 
+    if type(agent) == GPT:
+        loss = train_gpt_iter(
+            agent, optimizer, n_epochs, reward_min, reward_max, buffer
+        )
+    else:
+        loss = train_lstm_iter(agent, optimizer, n_epochs, buffer)
+
+    return agent, optimizer, loss
+
+
+def train_gpt_iter(model, optimizer, n_epochs, reward_min, reward_max, buffer):
     losses = []
     for _ in tqdm(range(n_epochs), "Training..."):
         for state, acts, rews in buffer:
             state = state.to(device)
             acts = acts.to(device)
-            _, loss = agent(state, acts)
+            _, loss = model(state, acts)
             if reward_max != reward_min:
                 rew_scaled = (rews - reward_min) / (reward_max - reward_min)
                 loss *= rew_scaled.mean()
@@ -233,8 +256,40 @@ def train_iter(
             optimizer.step()
 
     loss = sum(losses) / len(losses)
+    return loss
 
-    return agent, optimizer, loss
+
+def train_lstm_iter(model, optimizer, n_epochs, buffer):
+    model.train()
+
+    criterion = torch.nn.CrossEntropyLoss()
+
+    losses = []
+    for _ in tqdm(range(n_epochs), "Training..."):
+        state_h, state_c = model.init_state()
+
+        for states, actions, rewards in buffer:
+            optimizer.zero_grad()
+
+            y_pred, (state_h, state_c) = model(states, (state_h, state_c))
+            if actions.shape[1] < 4:
+                actions = torch.nn.functional.pad(
+                    actions, (4 - actions.shape[1], 0), "constant", 0
+                )
+            elif actions.shape[1] > 4:
+                actions = actions[:, -4:]
+            loss = criterion(y_pred.transpose(1, 2), actions)
+            # loss *= rewards
+            losses.append(loss.item())
+
+            state_h = state_h.detach()
+            state_c = state_c.detach()
+
+            loss.backward()
+            optimizer.step()
+
+    loss = sum(losses) / len(losses)
+    return loss
 
 
 def train_agent(
