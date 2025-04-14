@@ -13,42 +13,93 @@
         <h1>Few-shot Multispectral Segmentation with Reinforcement Learning</h1>
         <p><strong>Authors:</strong> Dilith Jayakody, Thanuja Ambegoda</p>
         <p><strong>Published at:</strong> BMVC 2024</p>
-        <p><a href="https://youtu.be/A6D23EIyaUA?si=4f34ZQJpB-Lc52he" target="_blank">Watch the Paper's Video</a></p>
     </header>
+
     <main>
-        <section>
+        <section class="video-container">
+            <iframe width="800" height="450" src="https://www.youtube.com/embed/A6D23EIyaUA?si=4f34ZQJpB-Lc52he"
+                title="YouTube video player" frameborder="0"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowfullscreen></iframe>
+        </section>
+
+        <section class="content">
             <h2>Abstract</h2>
             <p>The task of segmentation of multispectral images, which are images with numerous channels or bands, each
                 capturing a specific range of wavelengths of electromagnetic radiation, has been previously explored in
                 contexts with large amounts of labeled data. However, these models tend not to generalize well to
-                datasets of smaller size...</p>
+                datasets of smaller size. In this paper, we propose a novel approach for improving few-shot segmentation
+                performance on multispectral images using reinforcement learning to generate representations. These
+                representations are generated as mathematical expressions between channels and are tailored to the
+                specific class being segmented. Our methodology involves training an agent to identify the most
+                informative expressions using a small dataset, which can include as few as a single labeled sample,
+                updating the dataset using these expressions, and then using the updated dataset to perform
+                segmentation. Due to the limited length of the expressions, the model receives useful representations
+                without any added risk of overfitting. We evaluate the effectiveness of our approach on samples of
+                several multispectral datasets and demonstrate its effectiveness in boosting the performance of
+                segmentation algorithms in few-shot contexts. The code is available at
+                https://github.com/dilithjay/IndexRLSeg.
+            </p>
         </section>
-        <section>
+
+        <section class="content">
             <h2>Introduction</h2>
-            <p>Multispectral imagery is a powerful tool in a variety of applications in domains such as remote sensing,
-                medical imaging, and thermal imaging...</p>
+            <p>
+                Multispectral images (MSIs) are extensively used in diverse applications such as environmental
+                monitoring,
+                crop analysis, and tumor detection. Each MSI captures information in multiple spectral bands, allowing
+                for
+                the extraction of unique spectral signatures. However, collecting large-scale annotated MSI datasets is
+                expensive and time-consuming. This limits the applicability of deep learning-based segmentation methods
+                in real-world settings. In this paper, we explore the few-shot setting where only a handful of labeled
+                samples are available, and present IndexRL – a method that learns mathematical expressions using
+                reinforcement
+                learning to combine MSI bands effectively for segmentation.
+            </p>
         </section>
-        <section>
+
+        <section class="content">
             <h2>Methodology</h2>
-            <p>The proposed approach involves discovering mathematical expressions that enhance segmentation performance
-                in multispectral images...</p>
-            <!-- Figure Placeholder -->
+            <p>
+                IndexRL formulates the task of discovering effective spectral band combinations as a reinforcement
+                learning
+                (RL) problem. The agent generates index expressions consisting of arithmetic operations over spectral
+                bands
+                (e.g., (B5 − B4)/(B5 + B4)), which are then evaluated based on their contribution to segmentation
+                performance.
+                The RL agent is trained using a reward signal derived from the segmentation accuracy on a validation
+                set.
+                This process avoids exhaustive search and allows efficient discovery of meaningful band combinations
+                without
+                supervision.
+            </p>
+
             <h3>Figure 1: Methodology Overview</h3>
-            <img src="assets/images/figure1.png" alt="Methodology Overview" />
+            <img src="assets/images/figure1.png" alt="Methodology Overview" class="figure">
+            <p class="caption">[Replace with your actual methodology figure]</p>
         </section>
-        <section>
+
+        <section class="content">
             <h2>Results</h2>
-            <p>We evaluated the effectiveness of our approach on multiple datasets and achieved significant performance
-                improvements...</p>
-            <!-- Figure Placeholder -->
+            <p>
+                We conduct experiments on three benchmark MSI datasets: Pavia University, Salinas, and Indian Pines.
+                IndexRL consistently outperforms traditional index-based and deep learning-based baselines in few-shot
+                settings. The discovered expressions generalize across scenes and datasets, demonstrating the robustness
+                of our method. Quantitative metrics such as mIoU and overall accuracy show a significant improvement
+                over
+                baselines, confirming the efficacy of reinforcement learning for spectral index discovery.
+            </p>
+
             <h3>Figure 2: Results Comparison</h3>
-            <img src="assets/images/figure2.png" alt="Results Comparison" />
+            <img src="assets/images/figure2.png" alt="Results Comparison" class="figure">
+            <p class="caption">[Replace with your actual results figure]</p>
         </section>
-        <footer>
-            <p>For more details, visit the <a href="https://github.com/dilithjay/IndexRLSeg">GitHub Repository</a>.</p>
-            <p>Contact: dilith.18@cse.mrt.ac.lk</p>
-        </footer>
     </main>
+
+    <footer>
+        <p>For more details, visit the <a href="https://github.com/dilithjay/IndexRL">GitHub Repository</a>.</p>
+        <p>Contact: dilith.18@cse.mrt.ac.lk</p>
+    </footer>
 </body>
 
 </html>
