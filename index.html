@@ -46,53 +46,169 @@
             <h2>Introduction</h2>
             <p>
                 Multispectral images (MSIs) are extensively used in diverse applications such as environmental
-                monitoring,
-                crop analysis, and tumor detection. Each MSI captures information in multiple spectral bands, allowing
-                for
-                the extraction of unique spectral signatures. However, collecting large-scale annotated MSI datasets is
-                expensive and time-consuming. This limits the applicability of deep learning-based segmentation methods
-                in real-world settings. In this paper, we explore the few-shot setting where only a handful of labeled
-                samples are available, and present IndexRL – a method that learns mathematical expressions using
-                reinforcement
-                learning to combine MSI bands effectively for segmentation.
+                monitoring, crop analysis, and tumor detection. Generally, each channel of a multispectral image capture
+                unique ranges of wavelengths of light (similar to how RGB images capture red, green, and blue light).
+                However, collecting large-scale annotated MSI datasets is expensive and time-consuming. This limits the
+                applicability of deep learning-based segmentation methods in real-world settings. In this paper, we
+                explore the few-shot setting where only a handful of labeled samples are available, and present IndexRL
+                — a method that learns mathematical expressions using reinforcement learning to combine MSI bands
+                effectively for segmentation. These mathematical expressions (a.k.a. spectral indices) can be
+                interpreted as a form of feature engineering, where the agent learns to create new features from
+                existing ones. The key contributions of our work are:
             </p>
+            <ul>
+                <li>We propose a novel application of reinforcement learning for discovering spectral indices that
+                    improve few-shot segmentation performance in multispectral images.</li>
+                <li>We address the challenging task of few-shot multispectral segmentation which, to the best of our
+                    knowledge, has not been previously explored in the literature in a general context.</li>
+                <li>We demonstrate the effectiveness of our proposed approach on several datasets by comparing the
+                    performance against several baseline models.</li>
+            </ul>
         </section>
 
         <section class="content">
             <h2>Methodology</h2>
             <p>
-                IndexRL formulates the task of discovering effective spectral band combinations as a reinforcement
-                learning
-                (RL) problem. The agent generates index expressions consisting of arithmetic operations over spectral
-                bands
-                (e.g., (B5 − B4)/(B5 + B4)), which are then evaluated based on their contribution to segmentation
-                performance.
-                The RL agent is trained using a reward signal derived from the segmentation accuracy on a validation
-                set.
-                This process avoids exhaustive search and allows efficient discovery of meaningful band combinations
-                without
-                supervision.
+                The proposed methodology consisting of four main components: <strong>(1) Index Generator</strong>: Uses
+                the train set (image-mask pairs) to generate an expression. <strong>(2) Index Evaluator</strong>: Uses
+                the generated expression and the original images to create the evaluated indices. <strong>(3) Dataset
+                    Updater</strong>: Uses the evaluated indices to update the original images. <strong>(4) Segmentation
+                    Trainer</strong>: Trains a segmentation model using the updated images. We may interpret this
+                process as follows. The first component identifies the best augmentation for the data. The second
+                component executes the augmentation on each input image to create its respective single-channel
+                augmented image. The third component combines each augmented channel with its respective original input
+                image. In the sections that follow, we discuss the first three components. The fourth component, the
+                segmentation trainer, can be any multispectral segmentation approach.
             </p>
 
-            <h3>Figure 1: Methodology Overview</h3>
-            <img src="assets/images/figure1.png" alt="Methodology Overview" class="figure">
-            <p class="caption">[Replace with your actual methodology figure]</p>
+            <div class="figure">
+                <img src="assets/images/methodology overview.png" alt="Methodology Overview" class="figure">
+            </div>
+            <p class="caption">Figure 1: The proposed methodology and its four main components. (1) Index Generator
+                (2) Index Evaluator (3) Dataset Updater (4) Segmentation Trainer.</p>
         </section>
 
         <section class="content">
-            <h2>Results</h2>
+            <h2>Experiments and Results</h2>
             <p>
-                We conduct experiments on three benchmark MSI datasets: Pavia University, Salinas, and Indian Pines.
-                IndexRL consistently outperforms traditional index-based and deep learning-based baselines in few-shot
-                settings. The discovered expressions generalize across scenes and datasets, demonstrating the robustness
-                of our method. Quantitative metrics such as mIoU and overall accuracy show a significant improvement
-                over
-                baselines, confirming the efficacy of reinforcement learning for spectral index discovery.
+                We explore the performance of the proposed approach across several multispectral datasets, MFNet [14],
+                Sentinel-2 Cloud Mask Catalogue [12], Landslide4Sense [13], and RIT-18 [18]. For MFNet and RIT-18, which
+                are multiclass segmentation datasets, we evaluate our approach on selected classes (car, person, and
+                bike on MFNet; grass and sand on RIT-18).
             </p>
 
-            <h3>Figure 2: Results Comparison</h3>
-            <img src="assets/images/figure2.png" alt="Results Comparison" class="figure">
-            <p class="caption">[Replace with your actual results figure]</p>
+            <p>
+                As per Table 1, the proposed method results in a significant improvement in UNet. However, it can be
+                observed that this advantage decreases slightly with increasing model size. We hypothesize that bigger
+                models depend relatively less on the input representation.
+            </p>
+
+            <div class="figure-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th rowspan="2">Dataset</th>
+                            <th colspan="2">UNet</th>
+                            <th colspan="2">DeepLabV3</th>
+                            <th colspan="2">UNet++</th>
+                        </tr>
+                        <tr>
+                            <th>Baseline</th>
+                            <th>Ours</th>
+                            <th>Baseline</th>
+                            <th>Ours</th>
+                            <th>Baseline</th>
+                            <th>Ours</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>car</td>
+                            <td>62.5</td>
+                            <td>67.4 (RM)</td>
+                            <td>55.4</td>
+                            <td>58.2 (RM)</td>
+                            <td>74.8</td>
+                            <td>74.8 (CM)</td>
+                        </tr>
+                        <tr>
+                            <td>person</td>
+                            <td>46.4</td>
+                            <td>48.4 (RM)</td>
+                            <td>17.9</td>
+                            <td>25.2 (R)</td>
+                            <td>47.3</td>
+                            <td>48.5 (RM)</td>
+                        </tr>
+                        <tr>
+                            <td>bike</td>
+                            <td>37.8</td>
+                            <td>39.8 (RM)</td>
+                            <td>31.1</td>
+                            <td>53.5 (RM)</td>
+                            <td>40.3</td>
+                            <td>36.4 (R)</td>
+                        </tr>
+                        <tr>
+                            <td>cloud</td>
+                            <td>80.6</td>
+                            <td>83.3 (RM)</td>
+                            <td>62.0</td>
+                            <td>65.6 (R)</td>
+                            <td>82.3</td>
+                            <td>84.2 (RM)</td>
+                        </tr>
+                        <tr>
+                            <td>landslide</td>
+                            <td>38.0</td>
+                            <td>43.1 (RM)</td>
+                            <td>18.7</td>
+                            <td>20.5 (R)</td>
+                            <td>35.9</td>
+                            <td>42.8 (RM)</td>
+                        </tr>
+                        <tr>
+                            <td>grass</td>
+                            <td>58.0</td>
+                            <td>73.7 (RM)</td>
+                            <td>66.6</td>
+                            <td>65.6 (R)</td>
+                            <td>60.9</td>
+                            <td>70.3 (RM)</td>
+                        </tr>
+                        <tr>
+                            <td>sand</td>
+                            <td>13.1</td>
+                            <td>59.4 (RM)</td>
+                            <td>12.6</td>
+                            <td>41.3 (RM)</td>
+                            <td>25.2</td>
+                            <td>69.2 (RM)</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <br>
+            <p class="caption">Table 1: The IoU scores of the baseline model against
+                that of the best dataset updating mode for each dataset class when trained on each model.</p>
+
+
+            <div class="figure-container">
+                <img src="assets/images/qualitative.png" alt="Qualitative Comparison" class="figure">
+            </div>
+            <p class="caption">Figure 2: Qualitative comparison of segmentation results</p>
+        </section>
+
+        <section>
+            <h2>Conclusion</h2>
+            <p>
+                In this paper, we presented an approach for improving few-shot multispectral segmentation
+                performance. We achieve this by using reinforcement learning on a few labeled samples
+                to generate expressions that define data augmentations. Each generated expression is used
+                to augment each input image into a single-channel image (a.k.a. an evaluated index). The
+                results demonstrate that replacing multiple channels of the input image with such evaluated
+                indices from multiple expressions tends to lead to the best performance improvement.
+            </p>
         </section>
     </main>
 
