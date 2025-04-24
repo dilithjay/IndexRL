@@ -7,11 +7,11 @@ body {
 }
 
 a {
-    color: #1d4ed8;
+    color: #96eaff;
 }
 
 a:hover {
-    color: #1e40af;
+    color: white;
 }
 
 header {
@@ -63,6 +63,44 @@ tr {
     display: flex;
     justify-content: center;
     margin: 30px 0;
+}
+
+.code-block {
+    background-color: #f5f5f5;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 10px;
+    margin: 15px 0;
+    overflow: auto;
+    position: relative;
+}
+
+.code-block code {
+    display: block;
+    font-family: monospace;
+    white-space: pre;
+}
+
+.copy-button {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    background-color: #96eaff;
+    color: black;
+    border: none;
+    border-radius: 4px;
+    padding: 5px 10px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+.copy-button:hover {
+    background-color: white;
+}
+
+.copy-button:active {
+    background-color: #00aeff;
 }
 
 .figure {
